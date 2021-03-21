@@ -1,0 +1,315 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from collections import Counter
+import io
+from docx import Document
+import docx
+from nltk.util import pr
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sb
+from nltk import ngrams
+import re
+
+letters = ["а", "б", "в", "г", "д", "е", "є", "ж", "з", "и", "і", "ї", "й", "к", "л", "м", "н", "о", "п", "р", "с", "т",
+           "у", "ф", "х", "ц", "ч", "ш", "щ", "ь", "ю", "я"]
+lettersURK_STATISTIC = {"а": 0.0807, "б": 0.0177, "в": 0.0535, "г": 0.0155, "д": 0.0338, "е": 0.0495, "є": 0.0061,
+                        "ж": 0.0093, "з": 0.0232, "и": 0.0626,
+                        "і": 0.0575, "ї": 0.0065, "й": 0.0138, "к": 0.0354, "л": 0.0369, "м": 0.0303, "н": 0.0681,
+                        "о": 0.0942, "п": 0.0290, "р": 0.0448,
+                        "с": 0.0424, "т": 0.0535, "у": 0.0336, "ф": 0.0028, "х": 0.0119, "ц": 0.0083, "ч": 0.0141,
+                        "ш": 0.0076, "щ": 0.0056, "ь": 0.0177,
+                        "ю": 0.0093, "я": 0.0248}
+
+
+def character_distribution_of_string(pass_string):
+    chars_in_string = Counter(pass_string)
+    res = {}
+    for letter in letters:
+        if (letter in chars_in_string):
+            res[letter] = chars_in_string[letter]
+        else:
+            res[letter] = 0
+    return (res)
+
+
+def getText(filename):
+    doc = docx.Document(filename)
+    docText = '\n\n'.join(
+        paragraph.text for paragraph in doc.paragraphs
+    )
+    docText = re.sub(r'[^\w\s]', '', docText).lower();
+    return docText
+
+
+def getAvarage(texts: list):
+    dictionary = {};
+    for i in range(len(texts)):
+        text = getText(texts[i])
+        res = character_distribution_of_string(text)
+        for key, value in res.items():
+            if (key in dictionary):
+                dictionary[key] += value
+            else:
+                dictionary[key] = value
+    for key, value in dictionary.items():
+        dictionary[key] = value / len(texts)
+    return dictionary
+
+
+def getAvarageBi(texts: list):
+    dictionary = {};
+    for i in range(len(texts)):
+        text = getText(texts[i])
+        bi = biGramsInteger(text)
+        bi = intDictToFraqurency(bi)
+        for key, value in bi.items():
+            if (key in dictionary):
+                dictionary[key] += value
+            else:
+                dictionary[key] = value
+    for key, value in dictionary.items():
+        dictionary[key] = value / len(texts)
+    return dictionary
+
+
+def defaultHist(res: dict):
+    plt.bar(res.keys(), res.values(), color='g', label="Real distribution")
+    plt.show()
+
+
+def frequencyHist(res: dict):
+    keys = res.keys()
+    vals = res.values()
+    values = np.divide(list(vals), sum(vals));
+    plt.bar(keys, values, label="Real distribution")
+    plt.show()
+
+
+def compareAuthorAndAuthorBi(refsOne, refsTwo):
+    resultDict = {}
+    avgBiFirst = getAvarageBi(refsOne)
+    avgBiSecond = getAvarageBi(refsTwo)
+    for key, value in avgBiFirst.items():
+        if key in avgBiSecond:
+            resultDict[key] = abs(avgBiFirst[key] - avgBiSecond[key])
+    twoMeasure(resultDict)
+
+
+def intDictToFraqurency(dict: dict):
+    values = dict.values()
+    total = sum(values)
+    for key, value in dict.items():
+        dict[key] = dict[key] / total
+    return dict
+
+
+def compareUrkAndAuthor(refs):
+    resultDict = {}
+    res = getAvarage(refs)
+
+    res = intDictToFraqurency(res)
+
+    for key, value in res.items():
+        resultDict[key] = abs(res[key] - lettersURK_STATISTIC[key])
+    defaultHist(resultDict)
+
+
+def compareUrkAndAuthorComparing(refs):
+    res = getAvarage(refs)
+    res = intDictToFraqurency(res)
+
+    resList = list(res.values())
+    ukrList = list(lettersURK_STATISTIC.values())
+    x = list(res.keys())
+
+    plt.bar(x, resList, color='r', label="Author")
+    plt.bar(x, ukrList, color='b', label="UKRAINE", alpha=0.8)
+    plt.show()
+
+
+def outputDistribution(ref):
+    text = getText(ref)
+    res = character_distribution_of_string(text)
+    defaultHist(res)
+    frequencyHist(res)
+
+
+def outputDistributionAvg(refs):
+    res = getAvarage(refs)
+    defaultHist(res)
+    frequencyHist(res)
+
+
+def outPutBiAvg(refs):
+    avgBi = getAvarageBi(refs)
+    twoMeasure(avgBi)
+
+
+def outPutBi(ref):
+    text = getText(ref)
+    bi = biGramsInteger(text)
+    bi = intDictToFraqurency(bi)
+    twoMeasure(bi)
+
+
+def gramFindAuthorHelper(authorDict: dict, unknownDict: dict):
+    difference = 0
+    for key, value in authorDict.items():
+        if key in unknownDict:
+            difference += abs(value - unknownDict[key])
+        else:
+            difference += 0
+    return difference
+
+
+def gramFindAuthor(bahrianyy, starytckyy, vovchok, res: dict):
+    bahrianyyAvg = getAvarage(bahrianyy)
+    bahrianyyAvg = intDictToFraqurency(bahrianyyAvg)
+
+    starytckyyAvg = getAvarage(starytckyy)
+    starytckyyAvg = intDictToFraqurency(starytckyyAvg)
+
+    vovchokAvg = getAvarage(vovchok)
+    vovchokAvg = intDictToFraqurency(vovchokAvg)
+
+    difBahrianyy = gramFindAuthorHelper(bahrianyyAvg, res)
+    print("Difference Bahrianyy: " + str(difBahrianyy))
+
+    difStarytskyy = gramFindAuthorHelper(starytckyyAvg, res)
+    print("Difference Starytskyy: " + str(difStarytskyy))
+
+    difVovchok = gramFindAuthorHelper(vovchokAvg, res)
+    print("Difference Vovchok: " + str(difVovchok))
+
+
+def bigramFindAuthor(bahrianyy, starytskyy, vovchok, res: dict):
+    bahrianyyAvg = getAvarageBi(bahrianyy);
+    starytskyyAvg = getAvarageBi(starytskyy);
+    vovchokAvg = getAvarageBi(vovchok);
+
+    difBahrianyy = gramFindAuthorHelper(bahrianyyAvg, res)
+    print("Difference Bahrianyy: " + str(difBahrianyy))
+
+    difStarytskyy = gramFindAuthorHelper(starytskyyAvg, res)
+    print("Difference Starytskyy: " + str(difStarytskyy))
+
+    difVovchok = gramFindAuthorHelper(vovchokAvg, res)
+    print("Difference Vovchok: " + str(difVovchok))
+
+
+def Main():
+    bahrianyyMarusia = "Bahrianyy/bahrianyyBohuslavka.docx"
+    bahrianyySad = "Bahrianyy/bahrianyySadHetsymanskyy.docx"
+    bahrianyyTyhrolovy = "Bahrianyy/bahrianyyTyhrolovy.docx"
+
+    bahrianyy = [bahrianyyMarusia, bahrianyySad, bahrianyyTyhrolovy]
+
+    starytskyyTalan = "Starytskyy/starytskyy-mykhaylo-petrovych-talan.docx"
+    starytskyyKarmeliuk = "Starytskyy/starytskyy-mykhaylo-petrovych-karmeliuk.docx"
+    starytskyyObloha = "Starytskyy/starytskyy-mykhaylo-petrovych-obloha-bushi.docx"
+
+    starytskyy = [starytskyyTalan, starytskyyKarmeliuk, starytskyyObloha]
+
+    vovchokInstytutka = "Vovchok/vovchok-marko-instytutka.docx"
+    vovchokMarusia = "Vovchok/vovchok-marko-marusia.docx"
+    vovchokTryDoli = "Vovchok/vovchok-marko-try-doli.docx"
+
+    vovchok = [vovchokInstytutka, vovchokMarusia, vovchokTryDoli]
+
+    bahrianyyTest = "Bahrianyy/bahrianyy-ivan-liudyna-bizhyt-nad-prirvoiu.docx"
+    starytskyyTest = "Starytskyy/starytskyy-mykhaylo-petrovych-molodist-mazepy.docx"
+    vovchokTest = "Vovchok/vovchok-marko-pavlo-chornokryl.docx"
+
+    #outputDistribution(vovchokTryDoli)
+    #outputDistributionAvg(vovchok)
+
+    # outPutBi(kotsubVidma)
+
+    #outPutBiAvg(vovchok)
+
+    #compareUrkAndAuthorComparing(vovchok);
+
+    #### Comparing authors
+
+    #compareAuthorAndAuthorBi(starytskyy, vovchok)
+
+    ### Recognize author by gram
+
+    #text = getText(vovchokTest)
+
+    #text5000 = text[0:5000]
+    #text10000 = text[0:10000]
+    #text25000 = text[0:25000]
+    #text50000 = text[0:50000]
+    #res = character_distribution_of_string(text50000)
+    #res = intDictToFraqurency(res)
+    #gramFindAuthor(bahrianyy, starytskyy, vovchok, res)
+
+    ### Recognize author by bigram
+
+    text = getText(vovchokTest)
+
+    text5000 = text[0:5000]
+    text10000 = text[0:10000]
+    text25000 = text[0:25000]
+    text50000 = text[0:50000]
+
+    res = biGramsInteger(text50000)
+    res = intDictToFraqurency(res)
+
+    bigramFindAuthor(bahrianyy, starytskyy, vovchok, res)
+
+
+def twoMeasure(bi):
+    check = []
+    for letterOne in letters:
+        values = []
+        for letterTwo in letters:
+            key = (letterOne, letterTwo)
+            if (key in bi):
+                value = float(bi[key])
+                values.append(value);
+            else:
+                values.append(0.0);
+        check.append(values)
+
+    arrayOut = np.array(check);
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(arrayOut)
+
+    ax.set_xticks(np.arange(len(letters)))
+    ax.set_yticks(np.arange(len(letters)))
+
+    ax.set_xticklabels(letters)
+    ax.set_yticklabels(letters)
+
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor")
+
+    fig.tight_layout()
+    plt.show()
+
+
+def isValid(str):
+    return str != ' ' and str != '\n';
+
+
+def biGramsInteger(sentence):
+    # sentence = sentence.replace(" ", "")
+    n = 2
+    sixgrams = ngrams(sentence, n)
+
+    res = {}
+    for grams in sixgrams:
+        if (grams in res and isValid(grams[0]) and isValid(grams[1])):
+            res[grams] += 1
+        else:
+            if (isValid(grams[0]) and isValid(grams[1])):
+                res[grams] = 1
+    return (res)
+
+
+Main();
